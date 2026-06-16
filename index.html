@@ -431,56 +431,65 @@ const App = () => {
   };
   const getTotalCartItems = () => cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Fonction d'envoi de notification ntfy (corrigée avec fallback)
+  // Fonction d'envoi de notification ntfy (CORRIGÉE - utilise XMLHttpRequest)
   const sendNtfy = (totalItems, total) => {
     const topic = 'ldholdingnotif';
     const title = '📦 Nouvelle Commande !';
     const message = `Nouvelle commande de ${totalItems} articles, total : ${total} DZD.`;
     
-    // Essayer d'envoyer via fetch
-    fetch(`https://ntfy.sh/${topic}`, {
-      method: 'POST',
-      body: message,
-      headers: {
-        'Title': title,
-        'Priority': 'default',
-        'Tags': 'package',
-        'Click': window.location.href
-      },
-      mode: 'no-cors' // Important pour éviter les erreurs CORS sur mobile
-    })
-    .then(response => {
-      // Avec 'no-cors', la réponse est opaque, on ne peut pas vérifier le statut
-      console.log('✅ Notification ntfy envoyée (mode no-cors)');
-      // Afficher une confirmation
-      alert(`✅ Notification envoyée : ${message}`);
-    })
-    .catch(error => {
-      console.error('❌ Erreur lors de l\'envoi ntfy:', error);
-      
-      // Fallback : utiliser l'API Notification du navigateur
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, {
-          body: message,
-          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📦</text></svg>'
-        });
-        console.log('✅ Notification envoyée via Notification API');
-      } else if ('Notification' in window && Notification.permission !== 'denied') {
-        // Demander la permission
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            new Notification(title, {
-              body: message,
-              icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📦</text></svg>'
-            });
-            console.log('✅ Notification envoyée via Notification API');
-          }
-        });
+    console.log('📤 Envoi de la notification ntfy...');
+    console.log('Topic:', topic);
+    console.log('Message:', message);
+    
+    // Utiliser XMLHttpRequest à la place de fetch (plus compatible)
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://ntfy.sh/${topic}`, true);
+    xhr.setRequestHeader('Title', title);
+    xhr.setRequestHeader('Priority', 'default');
+    xhr.setRequestHeader('Tags', 'package');
+    xhr.setRequestHeader('Click', window.location.href);
+    
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        console.log('📥 Réponse reçue:', xhr.status, xhr.statusText);
+        if (xhr.status === 200) {
+          console.log('✅ Notification ntfy envoyée avec succès');
+          alert(`✅ Notification envoyée sur le téléphone !\n${message}`);
+        } else {
+          console.error('❌ Erreur ntfy:', xhr.status);
+          fallbackNotification(title, message);
+        }
       }
-      
-      // Fallback ultime : alerte
-      alert(`📦 Nouvelle commande !\n${message}`);
-    });
+    };
+    
+    xhr.onerror = function() {
+      console.error('❌ Erreur réseau XMLHttpRequest');
+      fallbackNotification(title, message);
+    };
+    
+    xhr.send(message);
+  };
+
+  // Fallback en cas d'échec
+  const fallbackNotification = (title, message) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, {
+        body: message,
+        icon: '📦'
+      });
+      console.log('📱 Notification affichée dans le navigateur');
+    } else if ('Notification' in window && Notification.permission !== 'denied') {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          new Notification(title, {
+            body: message,
+            icon: '📦'
+          });
+        }
+      });
+    } else {
+      alert(`📦 ${title}\n${message}`);
+    }
   };
 
   // Valider la commande avec notification ntfy
