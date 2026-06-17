@@ -117,12 +117,56 @@ const ProductCard = ({
   className: "text-slate-500 text-xs"
 }, "Pack: ", product.qty, " unit\xE9s"));
 
+// ---- Composant Toast ----
+const Toast = ({ message, type, onClose }) => {
+  if (!message) return null;
+  const bgColor = {
+    success: 'bg-emerald-50 border-emerald-500 text-emerald-800',
+    error: 'bg-rose-50 border-rose-500 text-rose-800',
+    info: 'bg-blue-50 border-blue-500 text-blue-800'
+  };
+  const icon = {
+    success: '✅',
+    error: '❌',
+    info: 'ℹ️'
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: `fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-sm w-full p-4 rounded-xl border ${bgColor[type] || bgColor.info} shadow-lg transition-all duration-300`
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-start gap-3"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-xl"
+  }, icon[type] || 'ℹ️'), /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 text-sm font-medium"
+  }, message), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "text-slate-400 hover:text-slate-600 transition-colors"
+  }, "✕")));
+};
+
 // ---- Composant principal ----
 const App = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentView, setCurrentView] = useState(DICT.VIEW.DASHBOARD);
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Toast state
+  const [toast, setToast] = useState({ message: '', type: 'info', visible: false });
+  const toastTimeout = useRef(null);
+
+  const showToast = (message, type = 'info') => {
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    setToast({ message, type, visible: true });
+    toastTimeout.current = setTimeout(() => {
+      setToast({ message: '', type: 'info', visible: false });
+    }, 4000);
+  };
+
+  const hideToast = () => {
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    setToast({ message: '', type: 'info', visible: false });
+  };
 
   // États modaux
   const [modals, setModals] = useState({
@@ -133,7 +177,8 @@ const App = () => {
     imgbb: false,
     productDetail: false,
     cart: false,
-    orders: false
+    orders: false,
+    notifications: false
   });
   const [editingProduct, setEditingProduct] = useState(null);
   const [manageSelectedBrand, setManageSelectedBrand] = useState(null);
@@ -179,6 +224,12 @@ const App = () => {
   useEffect(() => {
     localStorage.setItem('imgbb_api_key', imgbbApiKey);
   }, [imgbbApiKey]);
+
+  // Topic ntfy
+  const [ntfyTopic, setNtfyTopic] = useState(() => localStorage.getItem('ntfy_topic') || 'ldholdingnotif');
+  useEffect(() => {
+    localStorage.setItem('ntfy_topic', ntfyTopic);
+  }, [ntfyTopic]);
 
   // Données avec localStorage
   const [brands, setBrands] = useState(() => {
@@ -260,7 +311,10 @@ const App = () => {
     reader.readAsDataURL(file);
   };
   const addBrand = () => {
-    if (!newBrand.name) return;
+    if (!newBrand.name) {
+      showToast("Veuillez entrer un nom de marque.", "error");
+      return;
+    }
     setBrands([...brands, {
       id: Date.now(),
       ...newBrand,
@@ -274,9 +328,13 @@ const App = () => {
       ...prev,
       brand: false
     }));
+    showToast("Marque ajoutée avec succès.", "success");
   };
   const addProduct = () => {
-    if (!newProduct.name || !newProduct.brandId) return;
+    if (!newProduct.name || !newProduct.brandId) {
+      showToast("Veuillez remplir tous les champs.", "error");
+      return;
+    }
     setBrands(brands.map(b => b.id === newProduct.brandId ? {
       ...b,
       products: [...b.products, {
@@ -297,6 +355,7 @@ const App = () => {
       ...prev,
       product: false
     }));
+    showToast("Produit ajouté avec succès.", "success");
   };
   const saveProductEdit = () => {
     setBrands(brands.map(b => ({
@@ -304,6 +363,7 @@ const App = () => {
       products: b.products.map(p => p.id === editingProduct.id ? editingProduct : p)
     })));
     setEditingProduct(null);
+    showToast("Produit modifié avec succès.", "success");
   };
 
   // Gestion des marques
@@ -324,6 +384,7 @@ const App = () => {
       image: editingBrandImage
     } : b));
     cancelEditBrand();
+    showToast("Marque modifiée avec succès.", "success");
   };
   const confirmDeleteBrand = id => {
     setConfirmDeleteBrandId(id);
@@ -332,6 +393,7 @@ const App = () => {
     setBrands(brands.filter(b => b.id !== confirmDeleteBrandId));
     setConfirmDeleteBrandId(null);
     if (manageSelectedBrand === confirmDeleteBrandId) setManageSelectedBrand(null);
+    showToast("Marque supprimée.", "success");
   };
   const cancelDeleteBrand = () => {
     setConfirmDeleteBrandId(null);
@@ -353,6 +415,7 @@ const App = () => {
       products: b.products.filter(p => p.id !== productId)
     } : b));
     setConfirmDeleteProduct(null);
+    showToast("Produit supprimé.", "success");
   };
   const cancelDeleteProduct = () => {
     setConfirmDeleteProduct(null);
@@ -408,46 +471,46 @@ const App = () => {
       ...prev,
       productDetail: false
     }));
+    showToast(`${selectedProduct.name} ajouté au panier.`, "success");
   };
   const removeFromCart = id => {
     setCart(cart.filter(item => item.id !== id));
+    showToast("Article retiré du panier.", "info");
   };
   const getTotalCartItems = () => cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // === FONCTIONS NTFY CORRIGÉES (CORS) ===
+  // === FONCTIONS NTFY (utilisant le topic dynamique) ===
   const sendNtfy = (totalItems, total) => {
-    const topic = 'ldholdingnotif';
+    const topic = ntfyTopic || 'ldholdingnotif';
     
-    // Paramètres dans l'URL pour éviter le blocage CORS
     const url = new URL(`https://ntfy.sh/${topic}`);
-    url.searchParams.append('ta', 'package'); // tags
-    url.searchParams.append('po', '3');       // priority (3 = default)
-    url.searchParams.append('x', window.location.href); // click
+    url.searchParams.append('ta', 'package');
+    url.searchParams.append('po', '3');
+    url.searchParams.append('x', window.location.href);
 
     const message = `📦 Nouvelle Commande !\nNouvelle commande de ${totalItems} articles, total : ${total} DZD.`;
     
-    console.log('📤 Envoi ntfy via URL...');
+    console.log('📤 Envoi ntfy vers le topic:', topic);
     
     fetch(url, {
       method: 'POST',
       body: message
-      // Plus d'en-têtes personnalisés -> Simple Request, donc pas de preflight CORS
     })
     .then(response => {
       if (response.ok) {
-        alert(`✅ Nouvelle commande !\n${message}`);
+        showToast(`✅ Commande validée ! ${totalItems} articles - ${total} DZD.`, "success");
       } else {
-        alert(`❌ Erreur ${response.status}: notification non envoyée.`);
+        showToast(`❌ Erreur ${response.status}: notification non envoyée.`, "error");
       }
     })
     .catch(error => {
       console.error('❌ Erreur réseau:', error);
-      alert('❌ Erreur réseau. Vérifie ta connexion internet.');
+      showToast("❌ Erreur réseau. Vérifie ta connexion.", "error");
     });
   };
 
   const testNtfy = () => {
-    const topic = 'ldholdingnotif';
+    const topic = ntfyTopic || 'ldholdingnotif';
     
     const url = new URL(`https://ntfy.sh/${topic}`);
     url.searchParams.append('ta', 'test');
@@ -461,20 +524,23 @@ const App = () => {
     })
     .then(response => {
       if (response.ok) {
-        alert('✅ Test réussi ! Vérifie ton téléphone.');
+        showToast(`✅ Test réussi sur le topic "${topic}" !`, "success");
       } else {
-        alert(`❌ Erreur : ${response.status}`);
+        showToast(`❌ Erreur ${response.status} sur le topic "${topic}".`, "error");
       }
     })
     .catch((err) => {
       console.error('❌ Erreur test:', err);
-      alert('❌ Erreur réseau lors du test.');
+      showToast(`❌ Erreur réseau sur le topic "${topic}".`, "error");
     });
   };
 
   // Valider la commande
   const validateOrder = () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0) {
+      showToast("Votre panier est vide.", "error");
+      return;
+    }
     const total = cart.reduce((sum, item) => sum + item.quantity * item.price * item.packQty, 0);
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
     const newOrder = {
@@ -495,14 +561,17 @@ const App = () => {
     setOrders(orders.map(order => 
       order.id === orderId ? { ...order, status: 'processing' } : order
     ));
+    showToast("Commande traitée.", "success");
   };
   const handleDeliver = (orderId) => {
     setOrders(orders.map(order => 
       order.id === orderId ? { ...order, status: 'delivered' } : order
     ));
+    showToast("Commande livrée.", "success");
   };
   const handleCancelOrder = (orderId) => {
     setOrders(orders.filter(order => order.id !== orderId));
+    showToast("Commande annulée.", "info");
   };
 
   // toggle admin
@@ -510,8 +579,10 @@ const App = () => {
     if (!isAdmin) {
       setIsAdmin(true);
       setCurrentView(DICT.VIEW.DASHBOARD);
+      showToast("Mode administrateur activé.", "info");
     } else {
       setIsAdmin(false);
+      showToast("Mode administrateur désactivé.", "info");
     }
   };
 
@@ -540,7 +611,7 @@ const App = () => {
       });
     }
     if (products.length === 0) {
-      alert("Aucune donnée à exporter.");
+      showToast("Aucune donnée à exporter.", "error");
       return;
     }
     const wb = XLSX.utils.book_new();
@@ -553,6 +624,7 @@ const App = () => {
     link.download = `export_produits_${new Date().toISOString().slice(0,10)}.xlsx`;
     link.click();
     URL.revokeObjectURL(link.href);
+    showToast("Exportation réussie !", "success");
   };
 
   // Import
@@ -560,7 +632,7 @@ const App = () => {
     const file = e.target.files[0];
     if (!file) return;
     if (!selectedBrandForData) {
-      alert("Veuillez sélectionner une marque avant d'importer.");
+      showToast("Veuillez sélectionner une marque avant d'importer.", "error");
       return;
     }
     const reader = new FileReader();
@@ -574,7 +646,7 @@ const App = () => {
         const headers = Object.keys(jsonData[0] || {});
         const hasAll = requiredColumns.every(col => headers.includes(col));
         if (!hasAll) {
-          alert("Le fichier doit contenir les colonnes : Nom, Prix, Pack.");
+          showToast("Le fichier doit contenir les colonnes : Nom, Prix, Pack.", "error");
           return;
         }
         const newProducts = jsonData.map(row => ({
@@ -586,7 +658,7 @@ const App = () => {
           brandId: Number(selectedBrandForData)
         })).filter(p => p.name !== '');
         if (newProducts.length === 0) {
-          alert("Aucun produit valide à importer.");
+          showToast("Aucun produit valide à importer.", "error");
           return;
         }
         setBrands(prevBrands => prevBrands.map(b => 
@@ -594,10 +666,10 @@ const App = () => {
             ? { ...b, products: newProducts }
             : b
         ));
-        alert(`${newProducts.length} produits importés avec succès.`);
+        showToast(`${newProducts.length} produits importés avec succès.`, "success");
       } catch (err) {
         console.error(err);
-        alert("Erreur lors de la lecture du fichier.");
+        showToast("Erreur lors de la lecture du fichier.", "error");
       }
     };
     reader.readAsArrayBuffer(file);
@@ -609,14 +681,14 @@ const App = () => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     if (!selectedBrandForData) {
-      alert("Veuillez sélectionner une marque.");
+      showToast("Veuillez sélectionner une marque.", "error");
       e.target.value = '';
       return;
     }
     const brandId = Number(selectedBrandForData);
     const brand = brands.find(b => b.id === brandId);
     if (!brand) {
-      alert("Marque introuvable.");
+      showToast("Marque introuvable.", "error");
       e.target.value = '';
       return;
     }
@@ -692,14 +764,14 @@ const App = () => {
       setBrands(prevBrands => prevBrands.map(b => 
         b.id === brandId ? { ...b, products: updatedProducts } : b
       ));
-      alert(`${count} image(s) associée(s).`);
+      showToast(`${count} image(s) associée(s).`, "success");
     } else {
-      alert("Aucune image associée.");
+      showToast("Aucune image associée.", "error");
     }
     e.target.value = '';
   };
 
-  // Rendu des modales
+  // Rendu des modales (inchangé)
   const renderModals = () => /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Modal, {
     isOpen: modals.brand,
     title: "Nouvelle Marque",
@@ -1169,7 +1241,34 @@ const App = () => {
       orders: false
     })),
     className: "mt-4"
-  }, "Fermer"))));
+  }, "Fermer"))), /*#__PURE__*/React.createElement(Modal, {
+    isOpen: modals.notifications,
+    title: "Notifications ntfy",
+    onClose: () => setModals(prev => ({
+      ...prev,
+      notifications: false
+    }))
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1"
+  }, "NTFY Topic :"), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    className: "w-full p-3 mb-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-indigo-300 outline-none transition",
+    value: ntfyTopic,
+    onChange: e => setNtfyTopic(e.target.value.trim()),
+    placeholder: "Entrez le topic ntfy (ex: ldholdingnotif)"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-3 mt-2"
+  }, /*#__PURE__*/React.createElement(Button, {
+    variant: "secondary",
+    onClick: () => setModals(prev => ({
+      ...prev,
+      notifications: false
+    }))
+  }, DICT.UI.BTN_CANCEL), /*#__PURE__*/React.createElement(Button, {
+    onClick: () => {
+      testNtfy();
+    }
+  }, "Tester"))));
 
   return /*#__PURE__*/React.createElement("div", {
     className: "fixed inset-0 bg-slate-50 flex justify-center overflow-y-auto"
@@ -1227,9 +1326,11 @@ const App = () => {
     }))
   }, "Commandes"), /*#__PURE__*/React.createElement(Button, {
     variant: "secondary",
-    onClick: testNtfy,
-    className: "border-2 border-indigo-300"
-  }, "🧪 Tester la notification")) : /*#__PURE__*/React.createElement("div", {
+    onClick: () => setModals(prev => ({
+      ...prev,
+      notifications: true
+    }))
+  }, "Notifications")) : /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-2 gap-4"
   }, brands.map(brand => /*#__PURE__*/React.createElement(BrandCard, {
     key: brand.id,
@@ -1241,7 +1342,11 @@ const App = () => {
     key: prod.id,
     product: prod,
     onClick: () => openProductDetail(prod, selectedBrand)
-  }))), renderModals()), /*#__PURE__*/React.createElement("style", null, `::-webkit-scrollbar { display: none; }`));
+  }))), renderModals()), /*#__PURE__*/React.createElement(Toast, {
+    message: toast.message,
+    type: toast.type,
+    onClose: hideToast
+  }), /*#__PURE__*/React.createElement("style", null, `::-webkit-scrollbar { display: none; }`));
 };
 window.reactRoot = window.reactRoot || ReactDOM.createRoot(document.getElementById('root'));
 window.reactRoot.render(/*#__PURE__*/React.createElement(App, null));
