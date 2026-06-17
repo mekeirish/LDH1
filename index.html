@@ -414,63 +414,61 @@ const App = () => {
   };
   const getTotalCartItems = () => cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // === FONCTION NTFY ===
+  // === FONCTIONS NTFY CORRIGÉES (CORS) ===
   const sendNtfy = (totalItems, total) => {
     const topic = 'ldholdingnotif';
-    const title = '📦 Nouvelle Commande !';
-    const message = `Nouvelle commande de ${totalItems} articles, total : ${total} DZD.`;
     
-    console.log('📤 Envoi ntfy...');
+    // Paramètres dans l'URL pour éviter le blocage CORS
+    const url = new URL(`https://ntfy.sh/${topic}`);
+    url.searchParams.append('ta', 'package'); // tags
+    url.searchParams.append('po', '3');       // priority (3 = default)
+    url.searchParams.append('x', window.location.href); // click
+
+    const message = `📦 Nouvelle Commande !\nNouvelle commande de ${totalItems} articles, total : ${total} DZD.`;
     
-    fetch(`https://ntfy.sh/${topic}`, {
+    console.log('📤 Envoi ntfy via URL...');
+    
+    fetch(url, {
       method: 'POST',
-      body: message,
-      headers: {
-        'Title': title,
-        'Priority': 'default',
-        'Tags': 'package',
-        'Click': window.location.href
-      }
+      body: message
+      // Plus d'en-têtes personnalisés -> Simple Request, donc pas de preflight CORS
     })
     .then(response => {
       if (response.ok) {
-        console.log('✅ ntfy envoyé');
         alert(`✅ Nouvelle commande !\n${message}`);
       } else {
-        console.error('❌ Erreur:', response.status);
-        alert(`❌ Erreur ${response.status}: notification non envoyée.\nVérifie que l'application ntfy est installée.`);
+        alert(`❌ Erreur ${response.status}: notification non envoyée.`);
       }
     })
     .catch(error => {
       console.error('❌ Erreur réseau:', error);
-      alert('❌ Erreur réseau: notification non envoyée.');
+      alert('❌ Erreur réseau. Vérifie ta connexion internet.');
     });
   };
 
-  // Bouton de test
   const testNtfy = () => {
     const topic = 'ldholdingnotif';
-    const title = '🧪 Test ntfy';
-    const message = 'Test depuis l\'application';
+    
+    const url = new URL(`https://ntfy.sh/${topic}`);
+    url.searchParams.append('ta', 'test');
+    url.searchParams.append('po', '3');
 
-    fetch(`https://ntfy.sh/${topic}`, {
+    const message = `🧪 Test ntfy\nTest depuis l'application.`;
+
+    fetch(url, {
       method: 'POST',
-      body: message,
-      headers: {
-        'Title': title,
-        'Priority': 'default',
-        'Tags': 'test'
-      }
+      body: message
     })
     .then(response => {
       if (response.ok) {
         alert('✅ Test réussi ! Vérifie ton téléphone.');
       } else {
-        alert('❌ Erreur: ' + response.status);
+        alert(`❌ Erreur : ${response.status}`);
       }
     })
-    .catch(() => {
-      alert('❌ Erreur réseau');
+    .catch((err) => {
+      console.error('❌ Erreur test:', err);
+      alert('❌ Erreur réseau lors du test.');
     });
   };
 
