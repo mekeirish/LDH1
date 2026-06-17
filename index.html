@@ -1,22 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>PWA App</title>
-    <link rel="manifest" href="manifest.json">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <style>
-        body { margin:0; padding:0; background-color:#f8fafc; font-family:system-ui; min-height:100vh; display:flex; align-items:center; justify-content:center; }
-        #root { width:100%; display:flex; justify-content:center; align-items:center; }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
-    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-    <script>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes"><title>PWA App</title><link rel="manifest" href="manifest.json"><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script><style>body{margin:0;padding:0;background-color:#f8fafc;font-family:system-ui;min-height:100vh;display:flex;align-items:center;justify-content:center;}#root{width:100%;display:flex;justify-content:center;align-items:center;}</style></head><body><div id="root"></div><script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script><script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script><script>
 const DICT = Object.freeze({
   VIEW: {
     DASHBOARD: 'VIEW_DASHBOARD',
@@ -431,74 +414,71 @@ const App = () => {
   };
   const getTotalCartItems = () => cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Fonction d'envoi de notification ntfy (CORRIGÉE - utilise XMLHttpRequest)
+  // === FONCTION NTFY ===
   const sendNtfy = (totalItems, total) => {
     const topic = 'ldholdingnotif';
     const title = '📦 Nouvelle Commande !';
     const message = `Nouvelle commande de ${totalItems} articles, total : ${total} DZD.`;
     
-    console.log('📤 Envoi de la notification ntfy...');
-    console.log('Topic:', topic);
-    console.log('Message:', message);
+    console.log('📤 Envoi ntfy...');
     
-    // Utiliser XMLHttpRequest à la place de fetch (plus compatible)
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `https://ntfy.sh/${topic}`, true);
-    xhr.setRequestHeader('Title', title);
-    xhr.setRequestHeader('Priority', 'default');
-    xhr.setRequestHeader('Tags', 'package');
-    xhr.setRequestHeader('Click', window.location.href);
-    
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState === 4) {
-        console.log('📥 Réponse reçue:', xhr.status, xhr.statusText);
-        if (xhr.status === 200) {
-          console.log('✅ Notification ntfy envoyée avec succès');
-          alert(`✅ Notification envoyée sur le téléphone !\n${message}`);
-        } else {
-          console.error('❌ Erreur ntfy:', xhr.status);
-          fallbackNotification(title, message);
-        }
+    fetch(`https://ntfy.sh/${topic}`, {
+      method: 'POST',
+      body: message,
+      headers: {
+        'Title': title,
+        'Priority': 'default',
+        'Tags': 'package',
+        'Click': window.location.href
       }
-    };
-    
-    xhr.onerror = function() {
-      console.error('❌ Erreur réseau XMLHttpRequest');
-      fallbackNotification(title, message);
-    };
-    
-    xhr.send(message);
+    })
+    .then(response => {
+      if (response.ok) {
+        console.log('✅ ntfy envoyé');
+        alert(`✅ Nouvelle commande !\n${message}`);
+      } else {
+        console.error('❌ Erreur:', response.status);
+        alert(`❌ Erreur ${response.status}: notification non envoyée.\nVérifie que l'application ntfy est installée.`);
+      }
+    })
+    .catch(error => {
+      console.error('❌ Erreur réseau:', error);
+      alert('❌ Erreur réseau: notification non envoyée.');
+    });
   };
 
-  // Fallback en cas d'échec
-  const fallbackNotification = (title, message) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, {
-        body: message,
-        icon: '📦'
-      });
-      console.log('📱 Notification affichée dans le navigateur');
-    } else if ('Notification' in window && Notification.permission !== 'denied') {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
-          new Notification(title, {
-            body: message,
-            icon: '📦'
-          });
-        }
-      });
-    } else {
-      alert(`📦 ${title}\n${message}`);
-    }
+  // Bouton de test
+  const testNtfy = () => {
+    const topic = 'ldholdingnotif';
+    const title = '🧪 Test ntfy';
+    const message = 'Test depuis l\'application';
+
+    fetch(`https://ntfy.sh/${topic}`, {
+      method: 'POST',
+      body: message,
+      headers: {
+        'Title': title,
+        'Priority': 'default',
+        'Tags': 'test'
+      }
+    })
+    .then(response => {
+      if (response.ok) {
+        alert('✅ Test réussi ! Vérifie ton téléphone.');
+      } else {
+        alert('❌ Erreur: ' + response.status);
+      }
+    })
+    .catch(() => {
+      alert('❌ Erreur réseau');
+    });
   };
 
-  // Valider la commande avec notification ntfy
+  // Valider la commande
   const validateOrder = () => {
     if (cart.length === 0) return;
-    
     const total = cart.reduce((sum, item) => sum + item.quantity * item.price * item.packQty, 0);
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-    
     const newOrder = {
       id: Date.now(),
       date: new Date().toLocaleString(),
@@ -506,12 +486,9 @@ const App = () => {
       total: total,
       status: 'received'
     };
-    
     setOrders([...orders, newOrder]);
     setCart([]);
     setModals(prev => ({ ...prev, cart: false }));
-    
-    // Envoyer la notification ntfy
     sendNtfy(totalItems, total);
   };
 
@@ -629,7 +606,7 @@ const App = () => {
     e.target.value = '';
   };
 
-  // Fonction d'ajout d'images avec normalisation robuste
+  // Fonction d'ajout d'images
   const handleAddImages = async (e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -650,7 +627,6 @@ const App = () => {
     let count = 0;
     const errors = [];
 
-    // Normalisation : minuscule, sans accents, espaces réduits
     const normalize = (str) => {
       if (!str) return '';
       return str.trim().toLowerCase()
@@ -659,7 +635,6 @@ const App = () => {
         .trim();
     };
 
-    // Map produit normalisé -> index
     const productMap = {};
     updatedProducts.forEach((p, idx) => {
       const key = normalize(p.name);
@@ -670,9 +645,6 @@ const App = () => {
       }
     });
 
-    console.log('=== PRODUCT MAP (normalisé) ===', productMap);
-
-    // Traitement d'une image
     const processImage = (file) => {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -698,56 +670,38 @@ const App = () => {
       });
     };
 
-    const fileDetails = [];
-
     for (const file of files) {
-      const originalFileName = file.name;
-      const nameWithoutExt = originalFileName.replace(/\.[^.]+$/, '').trim();
+      const nameWithoutExt = file.name.replace(/\.[^.]+$/, '').trim();
       const normalizedFileName = normalize(nameWithoutExt);
-      
-      fileDetails.push(`"${originalFileName}" -> normalisé: "${normalizedFileName}"`);
-      console.log(`Fichier original : ${originalFileName} -> normalisé : "${normalizedFileName}"`);
-
       const productIndex = productMap[normalizedFileName];
-
       if (productIndex !== undefined) {
-        console.log(`Correspondance trouvée pour "${originalFileName}" avec le produit "${updatedProducts[productIndex].name}"`);
         const dataUrl = await processImage(file);
         if (dataUrl) {
           let finalUrl = dataUrl;
           if (imgbbApiKey) {
             try {
               finalUrl = await uploadToImgbb(dataUrl);
-            } catch (err) {
-              console.warn("Upload imgbb failed, using base64", err);
-            }
+            } catch (err) {}
           }
           updatedProducts[productIndex] = { ...updatedProducts[productIndex], image: finalUrl };
           count++;
         } else {
-          errors.push(originalFileName + " (traitement échoué)");
+          errors.push(file.name);
         }
-      } else {
-        console.log(`Aucune correspondance pour "${originalFileName}"`);
       }
     }
-
     if (count > 0) {
       setBrands(prevBrands => prevBrands.map(b => 
         b.id === brandId ? { ...b, products: updatedProducts } : b
       ));
-      let msg = `${count} image(s) associée(s) aux produits de la marque ${brand.name}.`;
-      if (errors.length) msg += `\nErreurs : ${errors.join(', ')}`;
-      alert(msg);
+      alert(`${count} image(s) associée(s).`);
     } else {
-      const productList = updatedProducts.map(p => `"${p.name}" (normalisé: "${normalize(p.name)}")`).join('\n');
-      const fileList = fileDetails.join('\n');
-      alert(`Aucune image n'a pu être associée.\n\nProduits dans la marque "${brand.name}" :\n${productList}\n\nFichiers uploadés :\n${fileList}\n\nVérifie que le nom du fichier (sans extension) correspond exactement au nom du produit (insensible à la casse, accents ignorés).`);
+      alert("Aucune image associée.");
     }
     e.target.value = '';
   };
 
-  // Rendu des modales (inchangé)
+  // Rendu des modales
   const renderModals = () => /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Modal, {
     isOpen: modals.brand,
     title: "Nouvelle Marque",
@@ -1273,7 +1227,11 @@ const App = () => {
       ...prev,
       orders: true
     }))
-  }, "Commandes")) : /*#__PURE__*/React.createElement("div", {
+  }, "Commandes"), /*#__PURE__*/React.createElement(Button, {
+    variant: "secondary",
+    onClick: testNtfy,
+    className: "border-2 border-indigo-300"
+  }, "🧪 Tester la notification")) : /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-2 gap-4"
   }, brands.map(brand => /*#__PURE__*/React.createElement(BrandCard, {
     key: brand.id,
